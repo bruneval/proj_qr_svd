@@ -1,3 +1,4 @@
 src/*.o
 src/*.mod
 src/proj_qr_svd_scalapack
+src/proj_qr_svd_fortran

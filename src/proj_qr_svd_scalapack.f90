@@ -1,21 +1,16 @@
-
-!==========================================================
-!==========================================================
 !==========================================================
 program proj_qr_svd_scalapack
 #if defined(_OPENMP)
   use omp_lib
 #endif
   use low_level
+  use input_param
   implicit none
 
   real(dp), allocatable :: A(:,:), Y(:,:), B(:,:), C(:,:)
   real(dp), allocatable :: tau(:)
   integer :: descA(NDEL), descY(NDEL), descB(NDEL), descC(NDEL)
 
-  integer :: kp
-  integer :: ifile
-  character(len=128) :: input_file_name
   !=====
 
 #if defined(_OPENMP)
@@ -24,34 +19,9 @@ program proj_qr_svd_scalapack
 
   call init_scalapack()
 
-  ! Default
-  nI = 73**2
-  nG = 400 * 2
-  method = 'PROJ_QR_SVD'
-  k = 400
-  p = 0
-  q = 1
 
-  if( COMMAND_ARGUMENT_COUNT() == 1 ) then
-    call GET_COMMAND_ARGUMENT(1, VALUE=input_file_name)
-  else
-    stop "no input file"
-  endif
+  call read_input_file()
 
-  if( rank == 0 ) write(stdout,*) 'Reading input file: ', input_file_name
-  open(newunit=ifile, file=TRIM(input_file_name), status='old', action='read')
-  read(ifile,input)
-  close(ifile)
-
-  ! Assume nI >> nG
-  ! Enforce it
-  if( nI <= nG ) stop "nI <= nG"
-
-  if( rank == 0 ) write(*,*) 'k=',k
-  if( rank == 0 ) write(*,*) 'p=',p
-  if( rank == 0 ) write(*,*) 'q=',q
-
-  kp = k + p
 
   call get_matrix_A(file_in, nI, nG, A, descA)
 

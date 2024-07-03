@@ -19,11 +19,6 @@ module low_level
   integer :: cntxt_sd, nprow_sd, npcol_sd, iprow_sd, ipcol_sd
   integer :: cntxt_one, nprow_one, npcol_one, iprow_one, ipcol_one
 
-  integer :: p, k, q
-  integer :: nI, nG
-  character(len=128) :: file_in, file_out, method
-  namelist /input/ nI, nG, k, q, p, file_in, file_out, method
-
 
 contains
 
@@ -96,7 +91,7 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
   integer,intent(out) :: descAt(NDEL)
   !=====
   real(dp),allocatable :: Aread(:,:), A(:,:)
-  integer :: ngc
+  integer :: npw
   integer :: unitcv, ierr
   complex(dp),allocatable :: coulomb_vertex_I(:)
   integer :: complex_length
@@ -110,9 +105,9 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
 
   !write(stdout,'(1x,a,i6,a,i4)') 'Dimensions read:', nG, ' x ', nI
 
-  ngc = nG / 2
-  if( ngc * 2 /= nG ) stop 'nG should be even'
-  allocate(coulomb_vertex_I(ngc))
+  npw = nG / 2
+  if( npw * 2 /= nG ) stop 'nG should be even'
+  allocate(coulomb_vertex_I(npw))
 
   ! Create a SCALAPACK matrix (nG, nI) that is distributed on column index only
   mAr = NUMROC(nG, block_row, iprow_cd, first_row, nprow_cd)
@@ -120,7 +115,7 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
   
   if( rank == 0 ) write(stdout,'(/,1x,a,a,a)') 'Reading file ', TRIM(file_in), ' with MPI-IO'
   if( rank == 0 ) write(stdout,'(5x,a30,i4,a,i4)') 'using a processor grid:', nprow_cd, ' x ', npcol_cd
-  if( rank == 0 ) write(stdout,'(5x,a30,i6,a,i8)') 'CoulombVertex dimensions:', ngc, ' x ', nI
+  if( rank == 0 ) write(stdout,'(5x,a30,i6,a,i8)') 'CoulombVertex dimensions:', npw, ' x ', nI
 
   if( nproc > 1 ) then
 
@@ -133,7 +128,7 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
 
     ! complex_length in bytes whereas STORAGE_SIZE is in bits
     complex_length = STORAGE_SIZE(coulomb_vertex_I(1)) / 8
-    disp_increment = INT(complex_length, KIND=MPI_OFFSET_KIND) * INT(ngc, KIND=MPI_OFFSET_KIND)
+    disp_increment = INT(complex_length, KIND=MPI_OFFSET_KIND) * INT(npw, KIND=MPI_OFFSET_KIND)
 
     call MPI_FILE_OPEN(MPI_COMM_WORLD,TRIM(file_in), &
                        MPI_MODE_RDONLY, &
@@ -149,10 +144,10 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
       Il = INDXG2L(Ig,block_col,0,first_col,npcol_cd)
 
       call MPI_FILE_READ_AT(unitcv, disp, coulomb_vertex_I, &
-                            ngc, MPI_DOUBLE_COMPLEX, MPI_STATUS_IGNORE,ierr)
+                            npw, MPI_DOUBLE_COMPLEX, MPI_STATUS_IGNORE,ierr)
 
-      Aread(1:ngc,Il)       = coulomb_vertex_I(:)%re
-      Aread(ngc+1:2*ngc,Il) = coulomb_vertex_I(:)%im
+      Aread(1:npw,Il)       = coulomb_vertex_I(:)%re
+      Aread(npw+1:2*npw,Il) = coulomb_vertex_I(:)%im
 
       !DEBUG
       !if( Ig == 1 ) then
@@ -205,8 +200,8 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
     do Ig=1, nI
       read(unitcv) coulomb_vertex_I(:)
         
-      At(Ig,1:ngc)       = coulomb_vertex_I(:)%re
-      At(Ig,ngc+1:2*ngc) = coulomb_vertex_I(:)%im
+      At(Ig,1:npw)       = coulomb_vertex_I(:)%re
+      At(Ig,npw+1:2*npw) = coulomb_vertex_I(:)%im
     enddo
    
     close(unitcv)
