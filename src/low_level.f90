@@ -258,29 +258,17 @@ subroutine step1(kp, q, A, descA, Y, descY)
   Omega(:,:) = Omega(:,:) - 0.50d0
 
   ! Y = A * Omega
-  if( nproc == 1 ) then
-    write(*,*) 'DGEMM'
-    call DGEMM('N', 'N', nI, kp, nG, 1.0d0, A, nI, Omega, nG, 0.0d0, Y, nI)
-    do iq=1, q
-      ! Omega = A**T * Y
-      call DGEMM('T', 'N', nG, kp, nI, 1.0d0, A, nI, Y, nI, 0.0d0, Omega, nG)
-      ! Y = A * Omega
-      call DGEMM('N', 'N', nI, kp, nG, 1.0d0, A, nI, Omega, nG, 0.0d0, Y, nI)
-    enddo
-  else
-    write(*,*) 'PDGEMM'
+  call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
+  do iq=1, q
+    ! Omega = A**T * Y
+    call PDGEMM('T', 'N', nG, kp, nI, 1.0d0, A, 1, 1, descA, Y, 1, 1, descY, 0.0d0, Omega, 1, 1,descO)
+    ! Y = A * Omega
     call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
-    do iq=1, q
-      ! Omega = A**T * Y
-      call PDGEMM('T', 'N', nG, kp, nI, 1.0d0, A, 1, 1, descA, Y, 1, 1, descY, 0.0d0, Omega, 1, 1,descO)
-      ! Y = A * Omega
-      call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
-    enddo
-  endif
+  enddo
   deallocate(Omega)
   call cpu_time(finish)
 
-  if( rank == 0 ) write(stdout,*) 'Step 1: DGEMMs from Omega timing:', finish - start, 'seconds'
+  if( rank == 0 ) write(stdout,*) 'Step 1: (P)DGEMMs from Omega timing:', finish - start, 'seconds'
   call flush(stdout)
 
 end subroutine step1
@@ -492,18 +480,11 @@ subroutine step4(Y, descY, B, descB, C, descC)
   !call flush(200+rank)
   !call MPI_BARRIER(MPI_COMM_WORLD,info)
 
-  if( rank == 0 .AND. .FALSE.) then
-    write(*,*) 'scaling'
-    do i=1,kp
-      U(:,i) = U(:,i) * sigma(i)
-    enddo
-  else
-    if( rank == 0 ) write(*,*) 'PDSCAL'
-    do i=1,kp
-      call PDSCAL(kp, sigma(i), U, 1, i, descU,1)
-      if( rank == 0 ) write(200,*) sigma(i)
-    enddo
-  endif
+  if( rank == 0 ) write(*,*) 'PDSCAL'
+  do i=1,kp
+    call PDSCAL(kp, sigma(i), U, 1, i, descU,1)
+    if( rank == 0 ) write(200,*) sigma(i)
+  enddo
   call flush(200)
 
   if( rank == 0 ) write(*,*) 'Singular values:', sigma(1), sigma(kp)
@@ -521,8 +502,10 @@ subroutine step4(Y, descY, B, descB, C, descC)
 
   C(:,:) = 0.0d0
   if( nproc == 1 ) then
+    write(*,*) 'copy'
     C(1:kp,:) = U(1:kp,:)
   else
+    write(*,*) 'PDGEMR2D'
     !call PDLACPY( " ", kp, kp, U, 1, 1, descU, C, 1, 1, descC)
     call PDGEMR2D( kp, kp, U, 1, 1, descU, C, 1, 1, descC, cntxt_sd)
   endif
