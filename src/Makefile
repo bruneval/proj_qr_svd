@@ -23,11 +23,17 @@ FC=mpifort -fcheck=all -fopenmp -cpp
 
 all: proj_qr_svd_scalapack
 
-proj_qr_svd_scalapack: proj_qr_svd_scalapack.f90
-	$(FC) -o proj_qr_svd_scalapack proj_qr_svd_scalapack.f90 $(SCA)
+proj_qr_svd_scalapack: low_level.o proj_qr_svd_scalapack.o
+	$(FC) -o proj_qr_svd_scalapack proj_qr_svd_scalapack.o low_level.o $(SCA)
 
-proj_qr_svd_fortran: proj_qr_svd_fortran.f90
-	$(FC) -o proj_qr_svd_fortran proj_qr_svd_fortran.f90 $(LAPACK)
+proj_qr_svd_scalapack.o: proj_qr_svd_scalapack.f90
+	$(FC) -c proj_qr_svd_scalapack.f90
+
+low_level.o: low_level.f90
+	$(FC) -c low_level.f90
+
+#proj_qr_svd_fortran: proj_qr_svd_fortran.f90
+#	$(FC) -o proj_qr_svd_fortran proj_qr_svd_fortran.f90 $(LAPACK)
 
 clean:
 	$(RM)  proj_qr_svd_scalapack proj_qr_svd_fortran 
