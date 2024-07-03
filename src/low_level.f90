@@ -103,11 +103,12 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
   integer :: nstate2
   integer :: Ig, Il
 
-  !write(stdout,'(1x,a,i6,a,i4)') 'Dimensions read:', nG, ' x ', nI
+  write(stdout,'(1x,a,i7,a,i7)') 'Dimensions read:', nG, ' x ', nI
 
   npw = nG / 2
   if( npw * 2 /= nG ) stop 'nG should be even'
   allocate(coulomb_vertex_I(npw))
+  write(*,*) 'npw',npw,nG
 
   ! Create a SCALAPACK matrix (nG, nI) that is distributed on column index only
   mAr = NUMROC(nG, block_row, iprow_cd, first_row, nprow_cd)
@@ -257,16 +258,25 @@ subroutine step1(kp, q, A, descA, Y, descY)
   Omega(:,:) = Omega(:,:) - 0.50d0
 
   ! Y = A * Omega
-  !call DGEMM('N', 'N', m, kp, n, 1.0d0, A, m, Omega, n, 0.0d0, Y, m)
-  call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
-  do iq=1, q
-    ! Omega = A**T * Y
-    !call DGEMM('T', 'N', n, kp, m, 1.0d0, A, m, Y, m, 0.0d0, Omega, n)
-    call PDGEMM('T', 'N', nG, kp, nI, 1.0d0, A, 1, 1, descA, Y, 1, 1, descY, 0.0d0, Omega, 1, 1,descO)
-    ! Y = A * Omega
-    !call DGEMM('N', 'N', m, kp, n, 1.0d0, A, m, Omega, n, 0.0d0, Y, m)
+  if( nproc == 1 ) then
+    write(*,*) 'DGEMM'
+    call DGEMM('N', 'N', nI, kp, nG, 1.0d0, A, nI, Omega, nG, 0.0d0, Y, nI)
+    do iq=1, q
+      ! Omega = A**T * Y
+      call DGEMM('T', 'N', nG, kp, nI, 1.0d0, A, nI, Y, nI, 0.0d0, Omega, nG)
+      ! Y = A * Omega
+      call DGEMM('N', 'N', nI, kp, nG, 1.0d0, A, nI, Omega, nG, 0.0d0, Y, nI)
+    enddo
+  else
+    write(*,*) 'PDGEMM'
     call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
-  enddo
+    do iq=1, q
+      ! Omega = A**T * Y
+      call PDGEMM('T', 'N', nG, kp, nI, 1.0d0, A, 1, 1, descA, Y, 1, 1, descY, 0.0d0, Omega, 1, 1,descO)
+      ! Y = A * Omega
+      call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
+    enddo
+  endif
   deallocate(Omega)
   call cpu_time(finish)
 
@@ -320,7 +330,6 @@ subroutine step2(Y, descY, tau)
   else
     write(*,*) "PDGEQRF before nI, kp", nI, kp
     call PDGEQRF(nI, kp, Y, 1, 1, descY, tau, work, lwork, info)
-    write(*,*) "PDGEQRF after"
   endif
   deallocate(work)
 
@@ -354,25 +363,6 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
   nG = descA(N_)
   kp  = descY(N_)
 
-  !!DEBUG
-  !block
-  !  real(dp),allocatable :: Bd(:,:)
-  !  integer :: mBd, nBd, descBd(NDEL)
-  !  integer :: i, j, il, jl
-  !  write(*,*) 'DEBUG'
-
-  !  i = 3
-  !  j = 1
-  !  if( ipcol_cd == INDXG2P(j,block_col,0,first_col,npcol_cd) ) then
-  !    if( iprow_cd == INDXG2P(i,block_row,0,first_row,nprow_cd) ) then
-
-  !       il = INDXG2L(i,block_row,0,first_row,nprow_cd)
-  !       jl = INDXG2L(j,block_col,0,first_col,npcol_cd)
-  !       write(*,*) 'FBFB A before step3',i,j,rank, iprow_cd, ipcol_cd, A(il,jl)
-  !    endif
-  !  endif
-  !end block
-
 
   ! Step 3: Create B
   !
@@ -402,13 +392,16 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
     write(*,*) 'DORMQR'
     call DORMQR( "L", "T", nI, nG, kp, Y, nI, tau, A, nI, work, lwork, info)
   else
+    write(*,*) 'PDORMQR'
     call PDORMQR( "L", "T", nI, nG, kp, Y, 1, 1, descY, tau, A, 1, 1, descA, work, lwork, info)
   endif
   deallocate(work)
   if( nproc == 1) then
+    write(*,*) 'copy'
     B(1:kp,:) = A(1:kp,:)
   else
-  !call PDLACPY( " ", kp, nG, A, 1, 1, descA, B, 1, 1, descB)
+    !call PDLACPY( " ", kp, nG, A, 1, 1, descA, B, 1, 1, descB)
+    write(*,*) 'PDGEMR2D'
     call PDGEMR2D( kp, nG, A, 1, 1, descA, B, 1, 1, descB, cntxt_sd)
   endif
 
@@ -482,8 +475,10 @@ subroutine step4(Y, descY, B, descB, C, descC)
   allocate(work(lwork))
 
   if( nproc == 1 ) then
+    write(*,*) 'DGESVD'
     call DGESVD("S", "N", kp, nG, B, kp, sigma, U, kp, VT, 1, work, lwork, info)
   else
+    if( rank == 0 ) write(*,*) 'PDGESVD'
     call PDGESVD("V", "N", kp, nG, B, 1, 1, descB, sigma, U, 1, 1, descU, VT, 1, 1, descVT, work, lwork, info)
   endif
   deallocate(work)
@@ -497,11 +492,18 @@ subroutine step4(Y, descY, B, descB, C, descC)
   !call flush(200+rank)
   !call MPI_BARRIER(MPI_COMM_WORLD,info)
 
-  do i=1,kp
-    !U(:,i) = U(:,i) * sigma(i)
-    call PDSCAL(kp, sigma(i), U, 1, i, descU,1)
-    if( rank == 0 ) write(200,*) sigma(i)
-  enddo
+  if( rank == 0 .AND. .FALSE.) then
+    write(*,*) 'scaling'
+    do i=1,kp
+      U(:,i) = U(:,i) * sigma(i)
+    enddo
+  else
+    if( rank == 0 ) write(*,*) 'PDSCAL'
+    do i=1,kp
+      call PDSCAL(kp, sigma(i), U, 1, i, descU,1)
+      if( rank == 0 ) write(200,*) sigma(i)
+    enddo
+  endif
   call flush(200)
 
   if( rank == 0 ) write(*,*) 'Singular values:', sigma(1), sigma(kp)

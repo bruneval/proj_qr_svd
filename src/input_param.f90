@@ -34,7 +34,7 @@ subroutine read_input_file()
   read(ifile,input)
   close(ifile)
 
-  if( npw == 0 .OR. nG == 0 ) stop 'Set npw or nG'
+  if( npw == 0 .AND. nG == 0 ) stop 'Set npw or nG'
   if( npw /= 0 .AND. nG /= 0 )  stop 'Set npw or nG, not both'
   if( nG  /= 0 ) npw = nG / 2
   if( npw /= 0 ) nG = npw * 2

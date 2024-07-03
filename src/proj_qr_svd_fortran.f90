@@ -1,10 +1,10 @@
 program qr_svd
-  use,intrinsic :: ISO_FORTRAN_ENV, only: OUTPUT_UNIT
+  use input_param
   implicit none
 
-  integer, parameter :: stdout=OUTPUT_UNIT
-  integer, parameter :: dp=8
-  integer :: m, n, k, q
+  !integer, parameter :: stdout=OUTPUT_UNIT
+  !integer, parameter :: dp=8
+  integer :: m, n
   real(dp), allocatable :: A(:,:), B(:,:), C(:,:)
   real(dp), allocatable ::  M_ref(:,:), M_qrsvd(:,:), M_svd(:,:), M_projqrsvd(:,:)
   real(dp), allocatable :: R(:,:)
@@ -15,20 +15,26 @@ program qr_svd
   real(dp),allocatable :: work(:)
   integer :: lwork, info, i, j, iq, ifile
   real(dp) :: start, finish, start0, finish0
-  character(len=128) :: method, file_out, file_in
+  integer :: descA(NDEL), descC(NDEL)
+  !character(len=128) :: method, file_out, file_in
 
-  file_in  = "lih_fc_fv_irene_CoulombVertex.elements"
-  file_out = "test"
-  method = "QR_SVD"
-  method = "SVD"
-  method = "proj_QR_SVD"
-  k = 1000
-  q = 1
+  !file_in  = "lih_fc_fv_irene_CoulombVertex.elements"
+  !file_out = "test.elements"
+  !method = "QR_SVD"
+  !method = "SVD"
+  !method = "PROJ_QR_SVD"
+  !k = 500
+  !q = 1
+
+  call init_scalapack()
+  call read_input_file()
 
   write(*,*) 'k=',k
   write(*,*) 'q=',q
+  write(*,*) 'nproc=',nproc
+  write(*,*) nG, npw, nI
 
-  call get_matrix_A(file_in,A)
+  call get_matrix_A(file_in, nI, nG, A, descA)
   m = SIZE(A,dim=1)
   n = SIZE(A,dim=2)
   write(*,*) 'sizes m, n', m ,n
@@ -179,7 +185,7 @@ case('QR_SVD')
   allocate(C(m,k))
   C(:,:) = U(:,1:k)
 
-case('proj_QR_SVD')
+case('PROJ_QR_SVD')
 
   !
   ! proj QR SVD
@@ -358,12 +364,15 @@ case default
   stop "error in method choice"
 end select
 
-  call dump_matrix_C(file_out,C)
+  ! Fake descriptor
+  call DESCINIT(descC, nI, kp, block_row, block_col, first_row, first_col, cntxt_sd, nI, info)
+
+  call dump_matrix_C(k,file_out, C, descC)
 
 
 
 contains
-subroutine get_matrix_A(file_in, A)
+subroutine getget_matrix_A(file_in, A)
     implicit none
     character(len=*),intent(in) :: file_in
     real(dp),allocatable,intent(inout) :: A(:,:)
@@ -409,10 +418,10 @@ subroutine get_matrix_A(file_in, A)
 
     endif
 
-end subroutine get_matrix_A
+end subroutine getget_matrix_A
 
 
-subroutine dump_matrix_C(file_out, C)
+subroutine dumpdump_matrix_C(file_out, C)
   implicit none
 
   character(len=*),intent(in) :: file_out
@@ -446,7 +455,7 @@ subroutine dump_matrix_C(file_out, C)
   enddo
   close(unitcv)
 
-end subroutine dump_matrix_C
+end subroutine dumpdump_matrix_C
 
 subroutine print_matrix(name, matrix)
   implicit none
@@ -463,6 +472,6 @@ subroutine print_matrix(name, matrix)
     enddo
   enddo
   close(ifile)
-end subroutine
+end subroutine print_matrix
 
 end program

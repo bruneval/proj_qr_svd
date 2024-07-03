@@ -16,6 +16,8 @@ SCA= ${MKLROOT}/lib/intel64/libmkl_scalapack_lp64.a -Wl,--start-group ${MKLROOT}
 
 LAPACK= -m64  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_gf_lp64.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lgomp -lpthread -lm -ldl
 
+LAPACK = ${SCA}
+
 
 FC=mpifort -fcheck=all -fopenmp -cpp
 
@@ -27,14 +29,18 @@ proj_qr_svd_scalapack: low_level.o input_param.o proj_qr_svd_scalapack.o
 proj_qr_svd_scalapack.o: proj_qr_svd_scalapack.f90
 	$(FC) -c proj_qr_svd_scalapack.f90
 
+proj_qr_svd_fortran: low_level.o input_param.o proj_qr_svd_fortran.o
+	$(FC) -o proj_qr_svd_fortran proj_qr_svd_fortran.o low_level.o input_param.o  $(LAPACK)
+
+proj_qr_svd_fortran.o: low_level.f90 input_param.f90 proj_qr_svd_fortran.f90
+	$(FC) -c proj_qr_svd_fortran.f90 
+
+input_param.o: low_level.f90 input_param.f90
+	$(FC) -c input_param.f90
+
 low_level.o: low_level.f90
 	$(FC) -c low_level.f90
 
-input_param.o: input_param.f90
-	$(FC) -c input_param.f90
-
-proj_qr_svd_fortran: proj_qr_svd_fortran.f90
-	$(FC) -o proj_qr_svd_fortran proj_qr_svd_fortran.f90 $(LAPACK)
 
 clean:
 	$(RM)  proj_qr_svd_scalapack proj_qr_svd_fortran *.o *.mod
