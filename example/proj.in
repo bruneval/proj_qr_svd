@@ -1,0 +1,15 @@
+&input
+  
+ method= 'SVD'
+ method= 'PROJ_QR_SVD'
+
+ nG=13324
+ !nI=29584
+ nI=595984
+ k=100 ! 4000
+ p=0
+ q=1
+ !file_in='lih_fc_fv_CoulombVertex.elements'
+ file_in='lih_fc_CoulombVertex.elements'
+ file_out='toto_CoulombVertex.elements'
+/
