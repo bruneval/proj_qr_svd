@@ -13,11 +13,12 @@ program proj_qr_svd_scalapack
 
   !=====
 
-#if defined(_OPENMP)
-  write(*,*) 'OPENMP threads:', omp_get_max_threads()
-#endif
 
   call init_scalapack()
+
+#if defined(_OPENMP)
+  if( rank == 0 ) write(stdout,*) 'OPENMP threads:', omp_get_max_threads()
+#endif
 
 
   call read_input_file()

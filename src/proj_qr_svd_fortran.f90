@@ -30,6 +30,7 @@ program qr_svd
   call read_input_file()
 
   write(*,*) 'k=',k
+  write(*,*) 'p=',p
   write(*,*) 'q=',q
   write(*,*) 'nproc=',nproc
   write(*,*) nG, npw, nI
@@ -208,11 +209,24 @@ case('PROJ_QR_SVD')
   if( .TRUE. ) then
     call random_number(Omega)
     Omega(:,:) = Omega(:,:) - 0.50d0
+
+    ! Write random
+    if( .TRUE. ) then
+       write(*,*) 'Writing Omega to file', n, ' x ', k 
+       open(newunit=ifile, file='random1', action='write', form='unformatted', access='stream')
+       do j = 1, k
+         do i = 1, n
+           write(ifile) Omega(i,j)
+         enddo
+       enddo
+       close(ifile)
+    endif
+
   else
     write(*,*) 'Reading Omega from Omega.dat'
     open(newunit=ifile,file='Omega.dat',action='read')
-    do i = 1, n
-      do j = 1, k
+    do j = 1, k
+      do i = 1, n
         read(ifile,*) Omega(i,j)
       enddo
     enddo

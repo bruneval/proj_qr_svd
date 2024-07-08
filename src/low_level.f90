@@ -221,12 +221,16 @@ subroutine step1(kp, q, A, descA, Y, descY)
   real(dp),allocatable,intent(out) :: Y(:,:)
   integer,intent(out) :: descY(NDEL)
   !=====
+  logical :: read_random
   real(dp) :: start, finish
   integer :: nI, nG
   integer :: iq, info
   integer :: mY, nY
   integer :: mO, nO, descO(NDEL)
   real(dp),allocatable :: Omega(:,:)
+  integer :: unitr
+  integer :: ikp, ikpl, iGg, iGl
+  real(dp) :: rtmp
   !=====
 
   !
@@ -254,8 +258,28 @@ subroutine step1(kp, q, A, descA, Y, descY)
 
 
   ! Random Omega centered in zero
-  call random_number(Omega)
-  Omega(:,:) = Omega(:,:) - 0.50d0
+  inquire(file='random',exist=read_random)
+  if( read_random ) then
+    if( rank == 0 ) write(stdout,*) 'Read random noise from file', nG, ' x ', kp
+    if( rank == 0 ) write(stdout,*) mO, nO
+    if( rank == 0 ) write(stdout,*) iprow_sd, nprow_sd, ipcol_sd, npcol_sd
+    open(newunit=unitr, file='random', form='unformatted', access='stream', status='old', action='read')
+    do ikp=1,kp
+      do iGg=1,nG
+        read(unitr) rtmp
+        if( iprow_sd /= INDXG2P(iGg,block_row,0,first_row,nprow_sd) ) cycle
+        if( ipcol_sd /= INDXG2P(ikp,block_col,0,first_col,npcol_sd) ) cycle
+        iGl  = INDXG2L(iGg,block_row,0,first_row,nprow_sd)
+        ikpl = INDXG2L(ikp,block_col,0,first_col,npcol_sd)
+        Omega(iGl,ikpl) = rtmp
+      enddo
+    enddo
+    close(unitr)
+    if( rank == 0 ) write(stdout,*) 'Reading done!'
+  else
+    call random_number(Omega)
+    Omega(:,:) = Omega(:,:) - 0.50d0
+  endif
 
   ! Y = A * Omega
   call PDGEMM('N','N', nI, kp, nG, 1.0d0, A, 1, 1, descA, Omega, 1, 1, descO, 0.0d0, Y, 1, 1,descY)
@@ -301,7 +325,7 @@ subroutine step2(Y, descY, tau)
 
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 ) then
+  if( nproc == 1 .AND. .FALSE.) then
     call DGEQRF(nI, kp, Y, nI, tau, work, lwork, info)
   else
     call PDGEQRF(nI, kp, Y, 1, 1, descY, tau, work, lwork, info)
@@ -312,7 +336,7 @@ subroutine step2(Y, descY, tau)
   allocate(work(lwork))
   if( rank == 0 ) write(*,*) 'allocate workspace:',ALLOCATED(work)
 
-  if( nproc == 1 ) then
+  if( nproc == 1  .AND. .FALSE.) then
     write(*,*) " DGEQRF before nI, kp", nI, kp
     call DGEQRF(nI, kp, Y, nI, tau, work, lwork, info)
   else
@@ -367,7 +391,7 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
   ! DORMQR applies Q**T on a matrix A
   allocate(work(1))
   lwork = -1
-  if( nproc == 1) then
+  if( nproc == 1 .AND. .FALSE.) then
     call DORMQR( "L", "T", nI, nG, kp, Y, nI, tau, A, nI, work, lwork, info)
   else
     call PDORMQR( "L", "T", nI, nG, kp, Y, 1, 1, descY, tau, A, 1, 1, descA, work, lwork, info)
@@ -376,7 +400,7 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
   deallocate(work)
   allocate(work(lwork))
 
-  if( nproc == 1) then
+  if( nproc == 1 .AND. .FALSE.) then
     write(*,*) 'DORMQR'
     call DORMQR( "L", "T", nI, nG, kp, Y, nI, tau, A, nI, work, lwork, info)
   else
@@ -384,7 +408,7 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
     call PDORMQR( "L", "T", nI, nG, kp, Y, 1, 1, descY, tau, A, 1, 1, descA, work, lwork, info)
   endif
   deallocate(work)
-  if( nproc == 1) then
+  if( nproc == 1 .AND. .FALSE.) then
     write(*,*) 'copy'
     B(1:kp,:) = A(1:kp,:)
   else
@@ -453,7 +477,7 @@ subroutine step4(Y, descY, B, descB, C, descC)
 
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 ) then
+  if( nproc == 1 .AND. .FALSE.) then
     call DGESVD("S", "N", kp, nG, B, kp, sigma, U, kp, VT, 1, work, lwork, info)
   else
     call PDGESVD("V", "N", kp, nG, B, 1, 1, descB, sigma, U, 1, 1, descU, VT, 1, 1, descVT, work, lwork, info)
@@ -462,7 +486,7 @@ subroutine step4(Y, descY, B, descB, C, descC)
   deallocate(work)
   allocate(work(lwork))
 
-  if( nproc == 1 ) then
+  if( nproc == 1 .AND. .FALSE.) then
     write(*,*) 'DGESVD'
     call DGESVD("S", "N", kp, nG, B, kp, sigma, U, kp, VT, 1, work, lwork, info)
   else
@@ -501,7 +525,7 @@ subroutine step4(Y, descY, B, descB, C, descC)
   call DESCINIT(descC, nI, kp, block_row, block_col, first_row, first_col, cntxt_sd, mC, info)
 
   C(:,:) = 0.0d0
-  if( nproc == 1 ) then
+  if( nproc == 1 .AND. .FALSE.) then
     write(*,*) 'copy'
     C(1:kp,:) = U(1:kp,:)
   else
@@ -543,7 +567,7 @@ subroutine step5(Y, descY, tau, C, descC)
   ! DORMQR applies Q on a matrix C
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 ) then
+  if( nproc == 1 .AND. .FALSE.) then
     call DORMQR( "L", "N", nI, kp, kp, Y, nI, tau, C, nI, work, lwork, info)
   else
     call PDORMQR( "L", "N", nI, kp, kp, Y, 1, 1, descY, tau, C, 1, 1, descC, work, lwork, info)
@@ -553,7 +577,7 @@ subroutine step5(Y, descY, tau, C, descC)
   if( rank == 0 ) write(*,*) 'lwork:', lwork
   allocate(work(lwork))
 
-  if( nproc == 1 ) then
+  if( nproc == 1 .AND. .FALSE.) then
     call DORMQR( "L", "N", nI, kp, kp, Y, nI, tau, C, nI, work, lwork, info)
   else
     call PDORMQR( "L", "N", nI, kp, kp, Y, 1, 1, descY, tau, C, 1, 1, descC, work, lwork, info)
