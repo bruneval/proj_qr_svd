@@ -21,7 +21,7 @@ LAPACK = ${SCA}
 
 FC=mpifort -fcheck=all -fopenmp -cpp
 
-all: proj_qr_svd_scalapack proj_qr_svd_fortran
+all: proj_qr_svd_scalapack proj_qr_svd_lapack
 
 proj_qr_svd_scalapack: low_level.o input_param.o proj_qr_svd_scalapack.o
 	$(FC) -o proj_qr_svd_scalapack proj_qr_svd_scalapack.o low_level.o input_param.o $(SCA)
@@ -29,11 +29,11 @@ proj_qr_svd_scalapack: low_level.o input_param.o proj_qr_svd_scalapack.o
 proj_qr_svd_scalapack.o: proj_qr_svd_scalapack.f90
 	$(FC) -c proj_qr_svd_scalapack.f90
 
-proj_qr_svd_fortran: low_level.o input_param.o proj_qr_svd_fortran.o
-	$(FC) -o proj_qr_svd_fortran proj_qr_svd_fortran.o low_level.o input_param.o  $(LAPACK)
+proj_qr_svd_lapack: low_level.o input_param.o proj_qr_svd_lapack.o
+	$(FC) -o proj_qr_svd_lapack proj_qr_svd_lapack.o low_level.o input_param.o  $(LAPACK)
 
-proj_qr_svd_fortran.o: low_level.f90 input_param.f90 proj_qr_svd_fortran.f90
-	$(FC) -c proj_qr_svd_fortran.f90 
+proj_qr_svd_lapack.o: low_level.f90 input_param.f90 proj_qr_svd_lapack.f90
+	$(FC) -c proj_qr_svd_lapack.f90 
 
 input_param.o: low_level.f90 input_param.f90
 	$(FC) -c input_param.f90
@@ -43,4 +43,4 @@ low_level.o: low_level.f90
 
 
 clean:
-	$(RM)  proj_qr_svd_scalapack proj_qr_svd_fortran *.o *.mod
+	$(RM)  proj_qr_svd_scalapack proj_qr_svd_lapack *.o *.mod

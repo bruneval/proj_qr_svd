@@ -1,5 +1,6 @@
 program qr_svd
   use input_param
+  use low_level, only: get_matrix_A, dump_matrix_C
   implicit none
 
   !integer, parameter :: stdout=OUTPUT_UNIT
@@ -386,90 +387,6 @@ end select
 
 
 contains
-subroutine getget_matrix_A(file_in, A)
-    implicit none
-    character(len=*),intent(in) :: file_in
-    real(dp),allocatable,intent(inout) :: A(:,:)
-    logical,parameter :: random_matrix = .FALSE.
-    integer :: I, G
-    integer :: unitcv, nstate, istate, jstate, ijstate, npw
-    integer :: nstate_file, ijstate_file
-    complex(dp),allocatable :: coulomb_vertex_ij(:)
- 
-    if( random_matrix ) then
-        write(*,'(/,1x,a)') 'Random matrix for testing'
-        I = 1000   ! Number of rows (can be millions in actual scenario)
-        G = 800    ! Number of columns (can be large)
-        allocate(A(I, G))
-        ! Initialize matrix A with random values
-        call random_number(A)
-    else
-        write(*,*) 'Opening file:', TRIM(file_in)
-        ! hard-coded
-        nstate_file= 172
-        nstate = 172
-        npw = 6662
-        allocate(coulomb_vertex_ij(npw))
-        I = nstate**2
-        G = npw * 2
-        allocate(A(I, G))
-
-        open(newunit=unitcv, file=TRIM(file_in), form='unformatted', access='stream', status='old', action='read')
-        ijstate = 0
-        do istate=1,nstate_file
-          do jstate=1,nstate_file
-            read(unitcv) coulomb_vertex_ij(:)
-            if( istate > nstate .OR. jstate > nstate ) cycle
-            ijstate = ijstate + 1
-            
-            A(ijstate,1:npw)       = coulomb_vertex_ij(:)%re
-            A(ijstate,npw+1:2*npw) = coulomb_vertex_ij(:)%im
-          enddo
-        enddo
-      
-        close(unitcv)
-        write(*,*) 'Closing file:', TRIM(file_in)
-
-    endif
-
-end subroutine getget_matrix_A
-
-
-subroutine dumpdump_matrix_C(file_out, C)
-  implicit none
-
-  character(len=*),intent(in) :: file_out
-  real(dp),allocatable,intent(inout)  :: C(:,:)
-  !=====
-  integer :: nI, k
-  integer :: unitcv, ierr, info
-  complex(dp),allocatable :: coulomb_vertex_I(:)
-  integer :: kc, Ig
-  !=====
-
-  nI = SIZE(C,DIM=1)
-  k  = SIZE(C,DIM=2)
-  kc = k / 2
-
-
-  write(stdout,'(/,1x,a,a,a)') 'Writing file ', TRIM(file_out), ' with fortran'
-  write(stdout,'(5x,a,i6,a,i8)') 'CoulombVertex dimensions:', kc, ' x ', nI
-
-  allocate(coulomb_vertex_I(kc))
-  write(*,*) STORAGE_SIZE(coulomb_vertex_I(1)) / 8.0
-  write(*,*) STORAGE_SIZE(coulomb_vertex_I(1)) * kc * nI / 1024.**2 /8.0
-
-  open(newunit=unitcv, file=TRIM(file_out), access='stream', action='write')
-
-  do Ig=1, nI
-    coulomb_vertex_I(:) = CMPLX(C(Ig,1:kc), C(Ig,kc+1:2*kc))
-
-    write(unitcv) coulomb_vertex_I(:)
-
-  enddo
-  close(unitcv)
-
-end subroutine dumpdump_matrix_C
 
 subroutine print_matrix(name, matrix)
   implicit none
