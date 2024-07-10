@@ -26,19 +26,21 @@ program proj_qr_svd_scalapack
 
   call get_matrix_A(file_in, nI, nG, A, descA)
 
-  if( rank == 0 ) write(*,*) 'Proc', rank,'local A', SIZE(A,DIM=1), SIZE(A,DIM=2) 
-  if( rank == 0 ) write(*,*) 'Proc', rank,'global A', descA(M_), descA(N_)
+  if( rank == 0 ) write(stdout,*) 'Proc', rank,'local A', SIZE(A,DIM=1), SIZE(A,DIM=2) 
+  if( rank == 0 ) write(stdout,*) 'Proc', rank,'global A', descA(M_), descA(N_)
 
 
   select case(TRIM(method))
   case('PROJ_QR_SVD')
-    ! proj
+    ! Random noise to guess Span(A)
     call step1(kp, q, A, descA, Y, descY)
-    ! QR
+    ! QR decomposition of Y
     call step2(Y, descY, tau)
-    ! SVD
+    ! Apply Q on A -> B
     call step3(Y, descY, tau, A, descA, B, descB)
+    ! SVD of B
     call step4(Y, descY, B, descB, C, descC)
+    ! Apply Q on C
     call step5(Y, descY, tau, C, descC)
   case('SVD')
     call full_svd(A, descA, C, descC)
@@ -56,7 +58,7 @@ program proj_qr_svd_scalapack
   call dump_matrix_C(k, file_out, C, descC)
   call finalize_scalapack()
 
-  if( rank == 0 ) write(*,*) 'Job done'
+  if( rank == 0 ) write(stdout,*) 'Job done'
 
 
 end program proj_qr_svd_scalapack

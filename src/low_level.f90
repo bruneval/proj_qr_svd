@@ -103,12 +103,11 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
   integer :: nstate2
   integer :: Ig, Il
 
-  write(stdout,'(1x,a,i7,a,i7)') 'Dimensions read:', nG, ' x ', nI
+  if( rank == 0 ) write(stdout,'(1x,a,i7,a,i7)') 'Dimensions read:', nG, ' x ', nI
 
   npw = nG / 2
   if( npw * 2 /= nG ) stop 'nG should be even'
   allocate(coulomb_vertex_I(npw))
-  write(*,*) 'npw',npw,nG
 
   ! Create a SCALAPACK matrix (nG, nI) that is distributed on column index only
   mAr = NUMROC(nG, block_row, iprow_cd, first_row, nprow_cd)
@@ -318,14 +317,14 @@ subroutine step2(Y, descY, tau)
   !
   ! Step 2: Q R decomposition of Y
   !
-  if( rank == 0 ) write(*,*) ' **** Step 2 **** '
-  if( rank == 0 ) write(*,*) ' Y size:', nI, kp
+  if( rank == 0 ) write(stdout,*) ' **** Step 2 **** '
+  if( rank == 0 ) write(stdout,*) ' QR problem of size:', nI, ' x ', kp
   call flush(stdout)
   allocate(tau(kp))
 
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 .AND. .FALSE.) then
+  if( nproc == 1 ) then
     call DGEQRF(nI, kp, Y, nI, tau, work, lwork, info)
   else
     call PDGEQRF(nI, kp, Y, 1, 1, descY, tau, work, lwork, info)
@@ -336,11 +335,9 @@ subroutine step2(Y, descY, tau)
   allocate(work(lwork))
   if( rank == 0 ) write(*,*) 'allocate workspace:',ALLOCATED(work)
 
-  if( nproc == 1  .AND. .FALSE.) then
-    write(*,*) " DGEQRF before nI, kp", nI, kp
+  if( nproc == 1 ) then
     call DGEQRF(nI, kp, Y, nI, tau, work, lwork, info)
   else
-    write(*,*) "PDGEQRF before nI, kp", nI, kp
     call PDGEQRF(nI, kp, Y, 1, 1, descY, tau, work, lwork, info)
   endif
   deallocate(work)
@@ -379,7 +376,8 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
   ! Step 3: Create B
   !
   ! B = Q**T * A
-  if( rank == 0 ) write(*,*) ' **** Step 3 **** '
+  if( rank == 0 ) write(stdout,*) ' **** Step 3 ****'
+  if( rank == 0 ) write(stdout,*) ' Apply Q**T on A'
   call flush(stdout)
 
   ! B is kp x nG
@@ -391,7 +389,7 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
   ! DORMQR applies Q**T on a matrix A
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 .AND. .FALSE.) then
+  if( nproc == 1 ) then
     call DORMQR( "L", "T", nI, nG, kp, Y, nI, tau, A, nI, work, lwork, info)
   else
     call PDORMQR( "L", "T", nI, nG, kp, Y, 1, 1, descY, tau, A, 1, 1, descA, work, lwork, info)
@@ -400,21 +398,20 @@ subroutine step3(Y, descY, tau, A, descA, B, descB)
   deallocate(work)
   allocate(work(lwork))
 
-  if( nproc == 1 .AND. .FALSE.) then
-    write(*,*) 'DORMQR'
+  if( nproc == 1 ) then
     call DORMQR( "L", "T", nI, nG, kp, Y, nI, tau, A, nI, work, lwork, info)
   else
-    write(*,*) 'PDORMQR'
     call PDORMQR( "L", "T", nI, nG, kp, Y, 1, 1, descY, tau, A, 1, 1, descA, work, lwork, info)
   endif
   deallocate(work)
-  if( nproc == 1 .AND. .FALSE.) then
-    write(*,*) 'copy'
+  if( nproc == 1 ) then
+    write(stdout,*) 'copy with fortran'
     B(1:kp,:) = A(1:kp,:)
   else
-    !call PDLACPY( " ", kp, nG, A, 1, 1, descA, B, 1, 1, descB)
-    write(*,*) 'PDGEMR2D'
-    call PDGEMR2D( kp, nG, A, 1, 1, descA, B, 1, 1, descB, cntxt_sd)
+    !if( rank == 0 ) write(stdout,*) 'copy with PDGEMR2D'
+    !call PDGEMR2D( kp, nG, A, 1, 1, descA, B, 1, 1, descB, cntxt_sd)
+    if( rank == 0 ) write(stdout,*) 'copy with PDGEADD'
+    call PDGEADD('N', kp, nG, 1.0d0, A, 1, 1, descA, 0.0d0, B, 1, 1, descB)
   endif
 
   deallocate(A)
@@ -462,7 +459,7 @@ subroutine step4(Y, descY, B, descB, C, descC)
   ! Step 4: SVD of B
   !
   if( rank == 0 ) write(*,*) ' **** Step 4 **** '
-  if( rank == 0 ) write(*,*) ' Dimensions nI, k+p, nG:', nI, kp, nG
+  if( rank == 0 ) write(*,*) ' SVD problem of size k+p, nG:', kp, ' x ', nG
   call flush(stdout)
 
   allocate(sigma(kp))
@@ -490,7 +487,7 @@ subroutine step4(Y, descY, B, descB, C, descC)
     write(*,*) 'DGESVD'
     call DGESVD("S", "N", kp, nG, B, kp, sigma, U, kp, VT, 1, work, lwork, info)
   else
-    if( rank == 0 ) write(*,*) 'PDGESVD'
+    if( rank == 0 ) write(stdout,*) 'PDGESVD'
     call PDGESVD("V", "N", kp, nG, B, 1, 1, descB, sigma, U, 1, 1, descU, VT, 1, 1, descVT, work, lwork, info)
   endif
   deallocate(work)
@@ -504,14 +501,14 @@ subroutine step4(Y, descY, B, descB, C, descC)
   !call flush(200+rank)
   !call MPI_BARRIER(MPI_COMM_WORLD,info)
 
-  if( rank == 0 ) write(*,*) 'PDSCAL'
+  if( rank == 0 ) write(stdout,*) 'PDSCAL'
   do i=1,kp
     call PDSCAL(kp, sigma(i), U, 1, i, descU,1)
     if( rank == 0 ) write(200,*) sigma(i)
   enddo
   call flush(200)
 
-  if( rank == 0 ) write(*,*) 'Singular values:', sigma(1), sigma(kp)
+  if( rank == 0 ) write(stdout,*) 'Singular values (Max, Min):', sigma(1), sigma(kp)
   call cpu_time(finish)
   deallocate(sigma)
   deallocate(B)
@@ -526,15 +523,16 @@ subroutine step4(Y, descY, B, descB, C, descC)
 
   C(:,:) = 0.0d0
   if( nproc == 1 .AND. .FALSE.) then
-    write(*,*) 'copy'
+    write(stdout,*) 'copy with fortran'
     C(1:kp,:) = U(1:kp,:)
   else
-    write(*,*) 'PDGEMR2D'
-    !call PDLACPY( " ", kp, kp, U, 1, 1, descU, C, 1, 1, descC)
-    call PDGEMR2D( kp, kp, U, 1, 1, descU, C, 1, 1, descC, cntxt_sd)
+    !if( rank == 0 ) write(stdout,*) 'PDGEMR2D'
+    !call PDGEMR2D( kp, kp, U, 1, 1, descU, C, 1, 1, descC, cntxt_sd)
+    if( rank == 0 ) write(stdout,*) 'copy with PDGEADD'
+    call PDGEADD('N', kp, kp, 1.0d0, U, 1, 1, descU, 0.0d0, C, 1, 1, descC)
   endif
   deallocate(U)
-  if( rank == 0 ) write(*,*) 'Step 4: B SVD time:', finish - start, 'seconds'
+  if( rank == 0 ) write(stdout,*) 'Step 4: B SVD time:', finish - start, 'seconds'
   call flush(stdout)
 
 end subroutine step4
@@ -560,14 +558,14 @@ subroutine step5(Y, descY, tau, C, descC)
   kp  = descY(N_)
 
   ! Step 5: C = Q * U
-  if( rank == 0 ) write(*,*) ' **** Step 5 **** '
+  if( rank == 0 ) write(stdout,*) ' **** Step 5 **** '
   call flush(stdout)
   call cpu_time(start)
 
   ! DORMQR applies Q on a matrix C
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 .AND. .FALSE.) then
+  if( nproc == 1 ) then
     call DORMQR( "L", "N", nI, kp, kp, Y, nI, tau, C, nI, work, lwork, info)
   else
     call PDORMQR( "L", "N", nI, kp, kp, Y, 1, 1, descY, tau, C, 1, 1, descC, work, lwork, info)
@@ -577,7 +575,7 @@ subroutine step5(Y, descY, tau, C, descC)
   if( rank == 0 ) write(*,*) 'lwork:', lwork
   allocate(work(lwork))
 
-  if( nproc == 1 .AND. .FALSE.) then
+  if( nproc == 1 ) then
     call DORMQR( "L", "N", nI, kp, kp, Y, nI, tau, C, nI, work, lwork, info)
   else
     call PDORMQR( "L", "N", nI, kp, kp, Y, 1, 1, descY, tau, C, 1, 1, descC, work, lwork, info)
@@ -587,7 +585,7 @@ subroutine step5(Y, descY, tau, C, descC)
   deallocate(Y)
 
   call cpu_time(finish)
-  if( rank == 0 ) write(*,*) 'Step 5: C = Q * U product time:', finish - start, 'seconds'
+  if( rank == 0 ) write(stdout,*) 'Step 5: C = Q * U product time:', finish - start, 'seconds'
   call flush(stdout)
 
 end subroutine step5
