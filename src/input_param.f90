@@ -2,7 +2,7 @@ module input_param
   use low_level
 
   integer, protected :: p, k, q
-  integer, protected :: nI, nG, npw
+  integer, protected :: nI, nG, npw, nmo
   character(len=128), protected :: file_in, file_out, method
   namelist /input/ nI, nG, npw, k, q, p, file_in, file_out, method
   
@@ -22,6 +22,8 @@ subroutine read_input_file()
   q = 1
   npw = 0
   nG  = 0
+  nmo = 0
+  nI  = 0
 
   if( COMMAND_ARGUMENT_COUNT() == 1 ) then
     call GET_COMMAND_ARGUMENT(1, VALUE=input_file_name)
@@ -39,9 +41,14 @@ subroutine read_input_file()
   if( nG  /= 0 ) npw = nG / 2
   if( npw /= 0 ) nG = npw * 2
 
+  if( nmo == 0 .AND. nI == 0 ) stop 'Set nmo or nI'
+  if( nmo /= 0 .AND. nI /= 0 ) stop 'Set nmo or nI, not both'
+  if( nmo /= 0 ) nI = nmo**2
+  if( nI /= 0 )  nmo = INT( SQRT( REAL(nI) ) )
+
   ! Assume nI >> nG
   ! Enforce it
-  if( nI <= nG ) stop "nI <= nG"
+  if( nI <= nG ) stop "Only for rectangular matrices with more rows than columns: nI <= nG"
 
   if( rank == 0 ) write(*,*) 'k=',k
   if( rank == 0 ) write(*,*) 'p=',p

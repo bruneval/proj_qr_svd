@@ -235,7 +235,7 @@ subroutine step1(kp, q, A, descA, Y, descY)
   !
   ! Step 1: Create Y
   !
-  if( rank == 0 ) write(*,*) ' **** Step 1 **** '
+  if( rank == 0 ) write(stdout,*) ' **** Step 1 **** '
   call flush(stdout)
   call cpu_time(start)
 
@@ -331,9 +331,7 @@ subroutine step2(Y, descY, tau)
   endif
   lwork = INT(work(1))
   deallocate(work)
-  if( rank == 0 ) write(*,*) 'allocate workspace:',lwork
   allocate(work(lwork))
-  if( rank == 0 ) write(*,*) 'allocate workspace:',ALLOCATED(work)
 
   if( nproc == 1 ) then
     call DGEQRF(nI, kp, Y, nI, tau, work, lwork, info)
@@ -458,8 +456,8 @@ subroutine step4(Y, descY, B, descB, C, descC)
   !
   ! Step 4: SVD of B
   !
-  if( rank == 0 ) write(*,*) ' **** Step 4 **** '
-  if( rank == 0 ) write(*,*) ' SVD problem of size k+p, nG:', kp, ' x ', nG
+  if( rank == 0 ) write(stdout,*) ' **** Step 4 **** '
+  if( rank == 0 ) write(stdout,*) ' SVD problem of size k+p, nG:', kp, ' x ', nG
   call flush(stdout)
 
   allocate(sigma(kp))
@@ -474,7 +472,7 @@ subroutine step4(Y, descY, B, descB, C, descC)
 
   allocate(work(1))
   lwork = -1
-  if( nproc == 1 .AND. .FALSE.) then
+  if( nproc == 1 ) then
     call DGESVD("S", "N", kp, nG, B, kp, sigma, U, kp, VT, 1, work, lwork, info)
   else
     call PDGESVD("V", "N", kp, nG, B, 1, 1, descB, sigma, U, 1, 1, descU, VT, 1, 1, descVT, work, lwork, info)
@@ -483,8 +481,8 @@ subroutine step4(Y, descY, B, descB, C, descC)
   deallocate(work)
   allocate(work(lwork))
 
-  if( nproc == 1 .AND. .FALSE.) then
-    write(*,*) 'DGESVD'
+  if( nproc == 1 ) then
+    write(stdout,*) 'DGESVD'
     call DGESVD("S", "N", kp, nG, B, kp, sigma, U, kp, VT, 1, work, lwork, info)
   else
     if( rank == 0 ) write(stdout,*) 'PDGESVD'
@@ -572,7 +570,6 @@ subroutine step5(Y, descY, tau, C, descC)
   endif
   lwork = INT(work(1))
   deallocate(work)
-  if( rank == 0 ) write(*,*) 'lwork:', lwork
   allocate(work(lwork))
 
   if( nproc == 1 ) then
@@ -617,7 +614,7 @@ subroutine full_svd(A, descA, C, descC)
   !
   ! Direct SVD of C
   !
-  if( rank == 0 ) write(*,*) ' **** Direct SVD **** '
+  if( rank == 0 ) write(stdout,*) ' **** Direct SVD **** '
 
   allocate(sigma(nG))
 
@@ -650,16 +647,17 @@ subroutine full_svd(A, descA, C, descC)
   do i=1,nG
     !C(:,i) = C(:,i) * sigma(i)
     call PDSCAL(nG, sigma(i), C, 1, i, descC,1)
-    if( rank == 0 ) write(200,*) sigma(i)
+    if( rank == 0 ) write(201,*) sigma(i)
   enddo
-  if( rank == 0 ) write(*,*) 'Singular values:', sigma(1), sigma(nG)
+  if( rank == 0 ) write(stdout,*) 'Singular values:', sigma(1), sigma(nG)
   call cpu_time(finish)
   deallocate(sigma)
   deallocate(A)
 
-  if( rank == 0 ) write(*,*) 'A SVD time:', finish - start, 'seconds'
+  if( rank == 0 ) write(stdout,*) 'A SVD time:', finish - start, 'seconds'
 
 end subroutine full_svd
+
 
 subroutine dump_matrix_C(k, file_out, C, descC)
   implicit none
