@@ -34,9 +34,9 @@ subroutine read_input_file()
     stop "no input file"
   endif
 
-  if( rank == 0 ) write(stdout,*) 'Reading input file: ', input_file_name
+  if( rank == 0 ) write(stdout, *) 'Reading input file: ', input_file_name
   open(newunit=ifile, file=TRIM(input_file_name), status='old', action='read')
-  read(ifile,input)
+  read(ifile, input)
   close(ifile)
 
   if( npw == 0 .AND. nG == 0 ) stop 'Set npw or nG'
@@ -57,9 +57,9 @@ subroutine read_input_file()
     stop "Only for rectangular matrices with more rows than columns: nI <= nG"
   endif
 
-  if( rank == 0 ) write(*,*) 'k=',k
-  if( rank == 0 ) write(*,*) 'p=',p
-  if( rank == 0 ) write(*,*) 'q=',q
+  if( rank == 0 ) write(*, *) 'k=', k
+  if( rank == 0 ) write(*, *) 'p=', p
+  if( rank == 0 ) write(*, *) 'q=', q
 
   kp = k + p
 

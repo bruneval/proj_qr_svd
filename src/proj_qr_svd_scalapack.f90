@@ -7,7 +7,7 @@ program proj_qr_svd_scalapack
   use input_param
   implicit none
 
-  real(dp), allocatable :: A(:,:), Y(:,:), B(:,:), C(:,:)
+  real(dp), allocatable :: A(:, :), Y(:, :), B(:, :), C(:, :)
   real(dp), allocatable :: tau(:)
   integer :: descA(NDEL), descY(NDEL), descB(NDEL), descC(NDEL)
 
@@ -17,7 +17,7 @@ program proj_qr_svd_scalapack
   call init_scalapack()
 
 #if defined(_OPENMP)
-  if( rank == 0 ) write(stdout,*) 'OPENMP threads:', omp_get_max_threads()
+  if( rank == 0 ) write(stdout, *) 'OPENMP threads:', omp_get_max_threads()
 #endif
 
 
@@ -26,7 +26,7 @@ program proj_qr_svd_scalapack
 
   call get_matrix_A(file_in, nmo, nmo_file, nG, A, descA)
 
-  if( rank == 0 ) write(stdout, *) 'Proc', rank, 'local A', SIZE(A,DIM=1), SIZE(A,DIM=2) 
+  if( rank == 0 ) write(stdout, *) 'Proc', rank, 'local A', SIZE(A, DIM=1), SIZE(A, DIM=2) 
   if( rank == 0 ) write(stdout, *) 'Proc', rank, 'global A', descA(M_), descA(N_)
 
   if( just_check ) then
@@ -57,13 +57,13 @@ program proj_qr_svd_scalapack
   !block
   !  real(dp) :: rtmp
   !  call PDDOT( k, rtmp, C, 1, 1, descC, nI, C, 1, 1, descC, nI)
-  !  write(stdout,*) 'Proc', rank, 'final integral (11|11) (Ha):', rtmp
+  !  write(stdout, *) 'Proc', rank, 'final integral (11|11) (Ha):', rtmp
   !end block
 
   call dump_matrix_C(k, file_out, C, descC)
   call finalize_scalapack()
 
-  if( rank == 0 ) write(stdout,*) 'Job done'
+  if( rank == 0 ) write(stdout, *) 'Job done'
 
 
 end program proj_qr_svd_scalapack
