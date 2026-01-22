@@ -36,7 +36,7 @@ program qr_svd
   write(*,*) 'nproc=',nproc
   write(*,*) nG, npw, nI
 
-  call get_matrix_A(file_in, nI, nG, A, descA)
+  call get_matrix_A(file_in, nmo, nmo_file, nG, A, descA)
   m = SIZE(A,dim=1)
   n = SIZE(A,dim=2)
   write(*,*) 'sizes m, n', m ,n

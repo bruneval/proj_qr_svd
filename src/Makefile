@@ -19,7 +19,7 @@ LAPACK= -m64  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_gf_lp64.a ${MKLROO
 LAPACK = ${SCA}
 
 
-FC=mpifort -fcheck=all -fopenmp -cpp
+FC=mpifort -fopenmp -cpp
 
 all: proj_qr_svd_scalapack proj_qr_svd_lapack
 

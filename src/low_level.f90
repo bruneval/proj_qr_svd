@@ -1,18 +1,19 @@
 module low_level
-  use,intrinsic :: ISO_FORTRAN_ENV, only: OUTPUT_UNIT
+  use, intrinsic :: ISO_FORTRAN_ENV, only: OUTPUT_UNIT
   use mpi
+  implicit none
 
-  integer,parameter :: stdout = OUTPUT_UNIT
-  integer,parameter :: dp = 8
-  integer,parameter :: NDEL = 9
-  integer,parameter :: M_ = 3
-  integer,parameter :: N_ = 4
-  integer,parameter :: SCALAPACK_BLOCKSIZE_MAX = 64
-  integer,parameter :: block_row = SCALAPACK_BLOCKSIZE_MAX
-  integer,parameter :: block_col = SCALAPACK_BLOCKSIZE_MAX
-  integer,parameter :: first_row = 0
-  integer,parameter :: first_col = 0
-  integer,external  :: NUMROC, INDXL2G, INDXG2L, INDXG2P
+  integer, parameter :: stdout = OUTPUT_UNIT
+  integer, parameter :: dp = 8
+  integer, parameter :: NDEL = 9
+  integer, parameter :: M_ = 3
+  integer, parameter :: N_ = 4
+  integer, parameter :: SCALAPACK_BLOCKSIZE_MAX = 64
+  integer, parameter :: block_row = SCALAPACK_BLOCKSIZE_MAX
+  integer, parameter :: block_col = SCALAPACK_BLOCKSIZE_MAX
+  integer, parameter :: first_row = 0
+  integer, parameter :: first_col = 0
+  integer, external  :: NUMROC, INDXL2G, INDXG2L, INDXG2P
 
   integer :: rank, nproc
   integer :: cntxt_cd, nprow_cd, npcol_cd, iprow_cd, ipcol_cd
@@ -82,19 +83,19 @@ subroutine finalize_scalapack()
 end subroutine finalize_scalapack
 
 
-subroutine get_matrix_A(file_in, nI, nG, At, descAt)
+subroutine get_matrix_A(file_in, nmo, nmo_file, nG, At, descAt)
   implicit none
 
   character(len=*),intent(in) :: file_in
-  integer,intent(in) :: nI, nG
+  integer,intent(in) :: nmo, nmo_file, nG
   real(dp),allocatable,intent(out) :: At(:,:)
   integer,intent(out) :: descAt(NDEL)
   !=====
   real(dp),allocatable :: Aread(:,:), A(:,:)
-  integer :: npw
+  integer :: npw, nI
   integer :: unitcv, ierr
-  complex(dp),allocatable :: coulomb_vertex_I(:)
-  integer :: complex_length
+  real(dp),allocatable :: coulomb_vertex_ij(:)
+  integer :: real_length
   real(dp) :: rtmp
   integer(kind=MPI_OFFSET_KIND) :: disp, disp_increment
   integer :: descAread(NDEL), descA(NDEL)
@@ -102,12 +103,15 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
   integer :: mAr, nAr, mA, nA, mAt, nAt, info
   integer :: nstate2
   integer :: Ig, Il
+  integer :: imo, jmo
+
+  nI = nmo * nmo
 
   if( rank == 0 ) write(stdout,'(1x,a,i7,a,i7)') 'Dimensions read:', nG, ' x ', nI
 
   npw = nG / 2
   if( npw * 2 /= nG ) stop 'nG should be even'
-  allocate(coulomb_vertex_I(npw))
+  allocate(coulomb_vertex_ij(nG))
 
   ! Create a SCALAPACK matrix (nG, nI) that is distributed on column index only
   mAr = NUMROC(nG, block_row, iprow_cd, first_row, nprow_cd)
@@ -122,37 +126,38 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
     call DESCINIT(descAread, nG, nI, block_row, block_col, first_row, first_col, cntxt_cd, mAr, info)
     if( info /= 0 ) stop "DESCINIT failure"
 
-    allocate(Aread(mAr,nAr))
+    allocate(Aread(mAr, nAr))
 
 
 
-    ! complex_length in bytes whereas STORAGE_SIZE is in bits
-    complex_length = STORAGE_SIZE(coulomb_vertex_I(1)) / 8
-    disp_increment = INT(complex_length, KIND=MPI_OFFSET_KIND) * INT(npw, KIND=MPI_OFFSET_KIND)
+    ! real_length in bytes whereas STORAGE_SIZE is in bits
+    real_length = STORAGE_SIZE(coulomb_vertex_ij(1)) / 8
+    disp_increment = INT(real_length, KIND=MPI_OFFSET_KIND) * INT(nG, KIND=MPI_OFFSET_KIND)
 
     call MPI_FILE_OPEN(MPI_COMM_WORLD,TRIM(file_in), &
                        MPI_MODE_RDONLY, &
                        MPI_INFO_NULL,unitcv,ierr)
 
 
-    ! Start with -disp_increment, so that when adding disp_increment, we get 0 in the first iteration
-    disp = -disp_increment
-    do Ig=1, nI
-      disp = disp + disp_increment
+    do jmo=1, nmo
+      do imo=1, nmo
 
-      if( ipcol_cd /= INDXG2P(Ig,block_col,0,first_col,npcol_cd) ) cycle
-      Il = INDXG2L(Ig,block_col,0,first_col,npcol_cd)
+        disp = (imo-1) * disp_increment + (jmo-1) * nmo_file * disp_increment
+        Ig = imo + (jmo-1) * nmo
 
-      call MPI_FILE_READ_AT(unitcv, disp, coulomb_vertex_I, &
-                            npw, MPI_DOUBLE_COMPLEX, MPI_STATUS_IGNORE,ierr)
+        if( ipcol_cd /= INDXG2P(Ig,block_col,0,first_col,npcol_cd) ) cycle
+        Il = INDXG2L(Ig,block_col,0,first_col,npcol_cd)
 
-      Aread(1:npw,Il)       = coulomb_vertex_I(:)%re
-      Aread(npw+1:2*npw,Il) = coulomb_vertex_I(:)%im
+        call MPI_FILE_READ_AT(unitcv, disp, coulomb_vertex_ij, &
+                              nG, MPI_DOUBLE_PRECISION, MPI_STATUS_IGNORE, ierr)
+
+        Aread(:, Il) = coulomb_vertex_ij(:)
 
       !DEBUG
       !if( Ig == 1 ) then
       !  write(stdout,*) 'Proc', rank,'Testing integral (11|11) (Ha):', DOT_PRODUCT(Aread(:,Il), Aread(:,Il))
       !endif
+      enddo
     enddo
 
     call MPI_FILE_CLOSE(unitcv, ierr)
@@ -160,7 +165,7 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
 
     mA = NUMROC(nG, block_row, iprow_sd, first_row, nprow_sd)
     nA = NUMROC(nI, block_col, ipcol_sd, first_col, npcol_sd)
-    allocate(A(mA,nA))
+    allocate(A(mA, nA))
     call DESCINIT(descA, nG, nI, block_row, block_col, first_row, first_col, cntxt_sd, mA, info)
     if( info /= 0 ) stop "DESCINIT failure"
 
@@ -193,15 +198,20 @@ subroutine get_matrix_A(file_in, nI, nG, At, descAt)
   else
     mAt = NUMROC(nI, block_row, iprow_sd, first_row, nprow_sd)
     nAt = NUMROC(nG, block_col, ipcol_sd, first_col, npcol_sd)
-    allocate(At(mAt,nAt))
+    allocate(At(mAt, nAt))
     call DESCINIT(descAt, nI, nG, block_row, block_col, first_row, first_col, cntxt_sd, mAt, info)
 
     open(newunit=unitcv, file=TRIM(file_in), form='unformatted', access='stream', status='old', action='read')
-    do Ig=1, nI
-      read(unitcv) coulomb_vertex_I(:)
-        
-      At(Ig,1:npw)       = coulomb_vertex_I(:)%re
-      At(Ig,npw+1:2*npw) = coulomb_vertex_I(:)%im
+    Ig = 0
+    do jmo=1, nmo
+      do imo=1, nmo_file
+        read(unitcv) coulomb_vertex_ij(:)
+        if( imo <= nmo ) then
+          Ig = Ig + 1
+          
+          At(Ig, :) = coulomb_vertex_ij(:)
+        endif
+      enddo
     enddo
    
     close(unitcv)
@@ -500,8 +510,8 @@ subroutine step4(Y, descY, B, descB, C, descC)
   !call MPI_BARRIER(MPI_COMM_WORLD,info)
 
   if( rank == 0 ) write(stdout,*) 'PDSCAL'
-  do i=1,kp
-    call PDSCAL(kp, sigma(i), U, 1, i, descU,1)
+  do i=1, kp
+    call PDSCAL(kp, sigma(i), U, 1, i, descU, 1)
     if( rank == 0 ) write(200,*) sigma(i)
   enddo
   call flush(200)
@@ -519,10 +529,10 @@ subroutine step4(Y, descY, B, descB, C, descC)
   allocate(C(mC,nC))
   call DESCINIT(descC, nI, kp, block_row, block_col, first_row, first_col, cntxt_sd, mC, info)
 
-  C(:,:) = 0.0d0
+  C(:, :) = 0.0d0
   if( nproc == 1 .AND. .FALSE.) then
-    write(stdout,*) 'copy with fortran'
-    C(1:kp,:) = U(1:kp,:)
+    write(stdout, *) 'copy with fortran'
+    C(1:kp, :) = U(1:kp, :)
   else
     !if( rank == 0 ) write(stdout,*) 'PDGEMR2D'
     !call PDGEMR2D( kp, kp, U, 1, 1, descU, C, 1, 1, descC, cntxt_sd)
@@ -757,6 +767,39 @@ subroutine dump_matrix_C(k, file_out, C, descC)
 
 end subroutine dump_matrix_C
 
-end module low_level
+subroutine evaluate_aa(nmo, A, descA)
+  real(dp), allocatable, intent(in)  :: A(:, :)
+  integer, intent(in) :: nmo, descA(NDEL)
 
+  integer :: descD(NDEL)
+  real(dp), allocatable :: D(:, :)
+  integer :: nI, nG, mD, nD, iD, jD, iDg, jDg, info
+
+  nI = descA(M_)
+  nG = descA(N_)
+  write(*, *) 'Evaluate A * A**T', nI, nG
+
+  mD = NUMROC(nI, block_row, iprow_sd, first_row, nprow_sd)
+  nD = NUMROC(nI, block_col, ipcol_sd, first_col, npcol_sd)
+  allocate(D(mD, nD))
+
+  call DESCINIT(descD, nI, nI, block_row, block_col, first_row, first_col, cntxt_sd, mD, info)
+
+  call PDSYRK('L', 'N', nI, nG, 1.0d0, A, 1, 1, descA, 0.0d0, D, 1, 1, descD) 
+
+  do jD=1, nD
+    do iD=1, mD
+      iDg = INDXL2G(iD, block_row, iprow_sd, 0, nprow_sd)
+      jDg = INDXL2G(jD, block_col, ipcol_sd, 0, npcol_sd)
+      if( iDg <= jDg ) write(1000+rank, *) iDg, jDg, D(iD, jD)
+    enddo
+  enddo
+
+  deallocate(D)
+  call flush(1000+rank)
+  write(*, *) 'printing is done'
+
+end subroutine evaluate_aa
+
+end module low_level
 

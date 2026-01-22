@@ -24,11 +24,16 @@ program proj_qr_svd_scalapack
   call read_input_file()
 
 
-  call get_matrix_A(file_in, nI, nG, A, descA)
+  call get_matrix_A(file_in, nmo, nmo_file, nG, A, descA)
 
-  if( rank == 0 ) write(stdout,*) 'Proc', rank,'local A', SIZE(A,DIM=1), SIZE(A,DIM=2) 
-  if( rank == 0 ) write(stdout,*) 'Proc', rank,'global A', descA(M_), descA(N_)
+  if( rank == 0 ) write(stdout, *) 'Proc', rank, 'local A', SIZE(A,DIM=1), SIZE(A,DIM=2) 
+  if( rank == 0 ) write(stdout, *) 'Proc', rank, 'global A', descA(M_), descA(N_)
 
+  if( just_check ) then
+    call evaluate_aa(nmo, A, descA)
+    call finalize_scalapack()
+    stop
+  endif 
 
   select case(TRIM(method))
   case('PROJ_QR_SVD')
